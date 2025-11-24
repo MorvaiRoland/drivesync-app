@@ -3,25 +3,24 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
-  url      = "mysql://drivesync:Kirajok123@mysql.nethely.hu:3306/drivesync"
+  provider = "postgresql"  // VÁLTÁS: mysql helyett postgresql
+  url      = env("DATABASE_URL")
 }
 
 // --- FELHASZNÁLÓK ---
 
 model User {
-  id                  Int      @id @default(autoincrement())
-  username            String   @unique @db.VarChar(50)
-  email               String   @unique @db.VarChar(50) // Fontos: Auth.js miatt egyedinek kezeljük
-  password            String   @db.VarChar(5000)
-  isDark              Boolean? @default(false) @map("isDark") // MySQL-ben tinyint(1)
-  registerDate        DateTime @default(now()) @map("registerDate") @db.Timestamp(0)
-  twoFactorAuthEnabled Boolean? @default(false) @map("twoFactorAuth_enabled")
+  id                   Int       @id @default(autoincrement())
+  username             String    @unique
+  email                String    @unique
+  password             String
+  isDark               Boolean?  @default(false)
+  registerDate         DateTime  @default(now())
+  twoFactorAuthEnabled Boolean?  @default(false)
 
-  // Kapcsolatok
-  cars          Car[]
-  expenses      Expense[]
-  transactions  Transaction[]
+  cars                 Car[]
+  expenses             Expense[]
+  transactions         Transaction[]
 
   @@map("users")
 }
@@ -30,30 +29,28 @@ model User {
 
 model Car {
   id             Int       @id @default(autoincrement())
-  ownerId        Int       @map("owner_id")
-  license        String?   @db.VarChar(50)
-  brand          String?   @db.VarChar(50)
-  type           String?   @db.VarChar(50)
+  ownerId        Int
+  license        String?
+  brand          String?
+  type           String?
   vintage        Int?
-  engineType     String?   @map("engine_type") @db.VarChar(50)
-  fuelType       String?   @map("fuel_type") @db.VarChar(20)
+  engineType     String?
+  fuelType       String?
   km             Int?
-  tireSize       String?   @map("tire_size") @db.VarChar(255)
-  service        DateTime? @db.Date // Utolsó szerviz dátuma
+  tireSize       String?
+  service        DateTime? @db.Date
   insurance      DateTime? @db.Date
-  color          String?   @db.VarChar(20)
-  notes          String?   @db.Text
-  inspectionDate DateTime? @map("inspection_date") @db.Date
+  color          String?
+  notes          String?
+  inspectionDate DateTime? @db.Date
   archived       Boolean?  @default(false)
-  oilType        String?   @map("oil_type") @db.VarChar(50)
-  oilQuantity    String?   @map("oil_quantity") @db.VarChar(20)
+  oilType        String?
+  oilQuantity    String?
 
-  // Kapcsolatok
   owner            User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   services         Service[]
   upcomingServices UpcomingService[]
 
-  @@index([ownerId], map: "owner_id")
   @@map("cars")
 }
 
@@ -61,36 +58,31 @@ model Car {
 
 model Service {
   id            Int      @id @default(autoincrement())
-  carId         Int      @map("car_id")
-  serviceTypeId Int?     @map("service_type_id")
-  serviceDate   DateTime @map("service_date") @db.Date
+  carId         Int
+  serviceTypeId Int?
+  serviceDate   DateTime @db.Date
   km            Int
   price         Int
-  replacedParts String?  @map("replaced_parts") @db.VarChar(255)
+  replacedParts String?
 
-  // Kapcsolatok
   car         Car          @relation(fields: [carId], references: [id], onDelete: Cascade)
   serviceType ServiceType? @relation(fields: [serviceTypeId], references: [id])
 
-  @@index([carId], map: "car_id")
-  @@index([serviceTypeId], map: "service_type_id")
   @@map("services")
 }
 
 model UpcomingService {
   id            Int       @id @default(autoincrement())
-  carId         Int       @map("car_id")
-  serviceDate   DateTime  @map("service_date") @db.Date
-  location      String?   @db.VarChar(255)
-  notes         String?   @db.Text
+  carId         Int
+  serviceDate   DateTime  @db.Date
+  location      String?
+  notes         String?
   reminder      Boolean?  @default(false)
-  lastEmailSent DateTime? @map("last_email_sent") @db.Date
+  lastEmailSent DateTime? @db.Date
   archived      Boolean?  @default(false)
 
-  // Kapcsolatok
   car Car @relation(fields: [carId], references: [id], onDelete: Cascade)
 
-  @@index([carId], map: "car_id")
   @@map("upcoming_services")
 }
 
@@ -98,31 +90,27 @@ model UpcomingService {
 
 model Expense {
   id       Int      @id @default(autoincrement())
-  what     String   @db.VarChar(250)
+  what     String
   price    Int
   datet    DateTime @db.Date
-  category String   @db.VarChar(255)
-  ownerId  Int      @map("owner_id")
+  category String
+  ownerId  Int
 
-  // Kapcsolatok
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
-  @@index([ownerId], map: "expense_id")
   @@map("expense")
 }
 
 model Transaction {
   id          Int             @id @default(autoincrement())
   type        TransactionType
-  description String          @db.VarChar(250)
+  description String
   amount      Int
   date        DateTime        @db.Date
-  ownerId     Int             @map("owner_id")
+  ownerId     Int
 
-  // Kapcsolatok
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
-  @@index([ownerId], map: "fk_owner_transaction")
   @@map("transactions")
 }
 
@@ -131,51 +119,50 @@ enum TransactionType {
   EXPENSE
 }
 
-// --- TÖRZADATOK (LOOKUP TABLES) ---
+// --- TÖRZADATOK ---
 
 model CarType {
   id    Int    @id @default(autoincrement())
-  brand String @db.VarChar(100)
-  type  String @db.VarChar(100)
+  brand String
+  type  String
 
-  @@index([brand], map: "idx_brand")
   @@map("car_types")
 }
 
 model EngineType {
   id   Int    @id @default(autoincrement())
-  name String @unique @db.VarChar(100)
+  name String @unique
 
   @@map("engine_types")
 }
 
 model ModelEngineType {
   id         Int    @id @default(autoincrement())
-  brand      String @db.VarChar(100)
-  type       String @db.VarChar(100)
-  engineName String @map("engine_name") @db.VarChar(100)
+  brand      String
+  type       String
+  engineName String
 
-  @@unique([brand, type, engineName], map: "brand")
+  @@unique([brand, type, engineName])
   @@map("model_engine_types")
 }
 
 model OilQuantity {
   id   Int    @id @default(autoincrement())
-  name String @unique @db.VarChar(20)
+  name String @unique
 
   @@map("oil_quantities")
 }
 
 model OilType {
   id   Int    @id @default(autoincrement())
-  name String @unique @db.VarChar(50)
+  name String @unique
 
   @@map("oil_types")
 }
 
 model ServiceType {
   id       Int       @id @default(autoincrement())
-  name     String    @db.VarChar(100)
+  name     String
   services Service[]
 
   @@map("service_types")
@@ -183,7 +170,7 @@ model ServiceType {
 
 model TireSize {
   id   Int    @id @default(autoincrement())
-  name String @unique @db.VarChar(50)
+  name String @unique
 
   @@map("tire_sizes")
 }
