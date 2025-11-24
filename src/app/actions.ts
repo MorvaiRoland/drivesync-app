@@ -131,27 +131,35 @@ export async function updateCar(formData: FormData) {
 }
 // --- SZERVIZ MŰVELETEK ---
 
+// src/app/actions.ts
+
 export async function addService(formData: FormData) {
   const session = await auth();
-  if (!session?.user?.email) return { error: "Nincs bejelentkezve" };
+  if (!session?.user?.email) return; // Ha nincs belépve, ne csináljon semmit
 
   const carId = Number(formData.get("carId"));
   
+  // Jogosultság ellenőrzés
   const user = await prisma.user.findUnique({
       where: { email: session.user.email },
       include: { cars: true }
   });
 
   const isMyCar = user?.cars.some(c => c.id === carId);
-  if (!isMyCar) return { error: "Nincs jogosultságod." };
+  if (!isMyCar) {
+    console.error("JOGOSULTSÁGI HIBA: Valaki más autójához akart szervizt hozzáadni.");
+    redirect('/dashboard'); // Visszairányítjuk a dashboardra
+  }
 
+  // Adatok kinyerése
   const serviceTypeId = Number(formData.get("serviceTypeId"));
-  const dateStr = formData.get("date") as string;
+  const dateStr = formData.get("date") as string; // YYYY-MM-DD
   const km = Number(formData.get("km"));
   const price = Number(formData.get("price"));
   const replacedParts = formData.get("replacedParts") as string;
 
   try {
+    // 1. Szerviz létrehozása
     await prisma.service.create({
       data: {
         carId,
@@ -163,7 +171,7 @@ export async function addService(formData: FormData) {
       }
     });
 
-    // Frissítjük az autó kilométeróra állását is
+    // 2. EXTRA: Az autó kilométerállását is frissítjük a legújabbra!
     await prisma.car.update({
         where: { id: carId },
         data: { km: km }
@@ -171,13 +179,13 @@ export async function addService(formData: FormData) {
 
   } catch (error) {
     console.error("Szerviz mentési hiba:", error);
-    return { error: "Sikertelen mentés" };
+    // Hiba esetén itt nem adunk vissza object-et, hanem csak befejezzük.
   }
 
+  // Siker esetén navigálás
   revalidatePath(`/dashboard/car/${carId}`);
   redirect(`/dashboard/car/${carId}`);
 }
-
 export async function deleteServiceRecord(serviceId: number) {
   const service = await prisma.service.findUnique({
     where: { id: serviceId },
