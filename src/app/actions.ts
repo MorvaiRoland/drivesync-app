@@ -5,13 +5,15 @@ import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
+// Definiáljuk a választípusokat a TypeScriptnek
+type ActionResponse = { error?: string } | void;
+
 // --- AUTÓ MŰVELETEK ---
 
-export async function addCar(formData: FormData) {
+export async function addCar(formData: FormData): Promise<ActionResponse> {
   const session = await auth()
-  // HA NINCS BELÉPVE VAGY HIBA VAN, MINDIG VISSZA KELL TÉRNI VOID TÍPUSSAL
+  
   if (!session?.user?.email) {
-    console.error("Jogosultsági hiba: Nincs bejelentkezve.");
     redirect('/login');
   }
 
@@ -20,11 +22,9 @@ export async function addCar(formData: FormData) {
   })
 
   if (!user) {
-    console.error("Felhasználó nem található.");
-    redirect('/dashboard'); // Vissza a biztonsági oldalra
+    redirect('/login');
   }
 
-  // Típuskényszerítés nélkül
   const brand = formData.get("brand") as string
   const type = formData.get("type") as string
   const license = formData.get("license") as string
@@ -32,6 +32,11 @@ export async function addCar(formData: FormData) {
   const km = Number(formData.get("km"))
   const fuelType = formData.get("fuelType") as string
   const color = formData.get("color") as string
+
+  // Validáció
+  if (!brand || !license) {
+      return { error: "A márka és a rendszám kötelező!" };
+  }
 
   try {
     await prisma.car.create({
@@ -49,15 +54,14 @@ export async function addCar(formData: FormData) {
     })
   } catch (error) {
     console.error("Adatbázis hiba az autó mentésekor:", error)
-    // Hibás mentés esetén is tovább kell vinni a felhasználót, 
-    // mivel a Server Action nem tud hibaüzenetet adni a Server Componenteknek.
+    return { error: "Sikertelen mentés. Az adatbázis nem érhető el, vagy a rendszám már létezik." };
   }
 
   revalidatePath('/dashboard')
-  redirect('/dashboard') // Siker
+  redirect('/dashboard')
 }
 
-export async function deleteCar(carId: number) {
+export async function deleteCar(carId: number): Promise<ActionResponse> {
   const session = await auth()
   if (!session?.user?.email) redirect('/login');
 
@@ -72,30 +76,38 @@ export async function deleteCar(carId: number) {
   })
 
   if (!car || !user || car.ownerId !== user.id) {
-      console.error("Nincs jogosultság a törléshez.");
-      redirect('/dashboard');
+      return { error: "Nincs jogosultságod törölni ezt az autót." };
   }
 
-  await prisma.car.delete({
-      where: { id: carId }
-  })
+  try {
+    await prisma.car.delete({
+        where: { id: carId }
+    })
+  } catch (error) {
+      console.error("Hiba törléskor:", error);
+      return { error: "Nem sikerült törölni az autót." };
+  }
 
   revalidatePath('/dashboard')
   redirect('/dashboard')
 }
 
-export async function updateCar(formData: FormData) {
+export async function updateCar(formData: FormData): Promise<ActionResponse> {
   const session = await auth();
   if (!session?.user?.email) redirect('/login');
 
   const carId = Number(formData.get("carId"));
-
+  
+  // Jogosultság ellenőrzés
   const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      include: { cars: true }
+      include: { cars: { select: { id: true } } } 
   });
+  
   const isMyCar = user?.cars.some(c => c.id === carId);
-  if (!isMyCar) redirect('/dashboard');
+  if (!isMyCar) {
+      return { error: "Nincs jogosultságod szerkeszteni ezt az autót." };
+  }
 
   const brand = formData.get("brand") as string;
   const type = formData.get("type") as string;
@@ -118,6 +130,7 @@ export async function updateCar(formData: FormData) {
     });
   } catch (error) {
     console.error("Hiba a frissítés során:", error);
+    return { error: "Sikertelen frissítés." };
   }
 
   revalidatePath(`/dashboard/car/${carId}`);
@@ -126,7 +139,7 @@ export async function updateCar(formData: FormData) {
 
 // --- SZERVIZ MŰVELETEK ---
 
-export async function addService(formData: FormData) {
+export async function addService(formData: FormData): Promise<ActionResponse> {
   const session = await auth();
   if (!session?.user?.email) redirect('/login');
 
@@ -134,11 +147,13 @@ export async function addService(formData: FormData) {
   
   const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      include: { cars: true }
+      include: { cars: { select: { id: true } } }
   });
 
   const isMyCar = user?.cars.some(c => c.id === carId);
-  if (!isMyCar) redirect('/dashboard');
+  if (!isMyCar) {
+      return { error: "Hiba: Nem a te autódhoz próbálsz szervizt rögzíteni." };
+  }
 
   const serviceTypeId = Number(formData.get("serviceTypeId"));
   const dateStr = formData.get("date") as string;
@@ -147,48 +162,59 @@ export async function addService(formData: FormData) {
   const replacedParts = formData.get("replacedParts") as string;
 
   try {
-    await prisma.service.create({
-      data: {
-        carId,
-        serviceTypeId,
-        serviceDate: new Date(dateStr),
-        km,
-        price,
-        replacedParts
-      }
-    });
-
-    await prisma.car.update({
-        where: { id: carId },
-        data: { km: km }
-    });
+    // Tranzakció: Szerviz létrehozása ÉS autó kilométeróra frissítése egyszerre
+    await prisma.$transaction([
+        prisma.service.create({
+            data: {
+                carId,
+                serviceTypeId,
+                serviceDate: new Date(dateStr),
+                km,
+                price,
+                replacedParts
+            }
+        }),
+        prisma.car.update({
+            where: { id: carId },
+            data: { km: km } 
+        })
+    ]);
 
   } catch (error) {
     console.error("Szerviz mentési hiba:", error);
+    return { error: "Sikertelen szerviz mentés." };
   }
 
   revalidatePath(`/dashboard/car/${carId}`);
   redirect(`/dashboard/car/${carId}`);
 }
 
-export async function deleteServiceRecord(serviceId: number) {
-  const service = await prisma.service.findUnique({
-    where: { id: serviceId },
-    select: { carId: true }
-  });
+export async function deleteServiceRecord(serviceId: number): Promise<ActionResponse> {
+  const session = await auth();
+  if (!session?.user?.email) redirect('/login');
 
-  if (service) {
-    await prisma.service.delete({
-      where: { id: serviceId }
+  try {
+    const service = await prisma.service.findUnique({
+      where: { id: serviceId },
+      select: { carId: true } // Csak a carId kell a revalidate-hez
     });
-    
-    revalidatePath(`/dashboard/car/${service.carId}`);
+
+    if (service) {
+      await prisma.service.delete({
+        where: { id: serviceId }
+      });
+      
+      revalidatePath(`/dashboard/car/${service.carId}`);
+    }
+  } catch (error) {
+    console.error("Hiba a szerviz törlésekor:", error);
+    return { error: "Nem sikerült törölni a bejegyzést." };
   }
 }
 
 // --- EMLÉKEZTETŐ MŰVELETEK ---
 
-export async function addUpcomingService(formData: FormData) {
+export async function addUpcomingService(formData: FormData): Promise<ActionResponse> {
   const session = await auth();
   if (!session?.user?.email) redirect('/login');
 
@@ -210,13 +236,22 @@ export async function addUpcomingService(formData: FormData) {
     });
   } catch (error) {
     console.error("Emlékeztető mentési hiba:", error);
+    return { error: "Nem sikerült menteni az emlékeztetőt." };
   }
 
   revalidatePath(`/dashboard/car/${carId}`);
   redirect(`/dashboard/car/${carId}`);
 }
 
-export async function deleteUpcomingService(id: number) {
-  await prisma.upcomingService.delete({ where: { id } });
-  revalidatePath('/dashboard/car/[id]', 'page'); 
+export async function deleteUpcomingService(id: number): Promise<ActionResponse> {
+  try {
+      await prisma.upcomingService.delete({ where: { id } });
+      // Megjegyzés: Itt a pontos path megadása a legbiztonságosabb, de mivel nincs contextünk a carId-ról,
+      // a dashboard/car/[id] nem mindig működik jól revalidate-nél paraméter nélkül. 
+      // Ha van ID-d, inkább azt használd, vagy revalidate-eld a teljes dashboardot.
+      revalidatePath('/dashboard'); 
+  } catch (e) {
+      console.error(e);
+      return { error: "Hiba a törléskor" };
+  }
 }

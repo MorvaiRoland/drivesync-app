@@ -3,20 +3,20 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"  // VÁLTÁS: mysql helyett postgresql
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 // --- FELHASZNÁLÓK ---
 
 model User {
-  id                   Int       @id @default(autoincrement())
-  username             String    @unique
-  email                String    @unique
+  id                   Int           @id @default(autoincrement())
+  username             String        @unique
+  email                String        @unique
   password             String
-  isDark               Boolean?  @default(false)
-  registerDate         DateTime  @default(now())
-  twoFactorAuthEnabled Boolean?  @default(false)
+  isDark               Boolean?      @default(false)
+  registerDate         DateTime      @default(now())
+  twoFactorAuthEnabled Boolean?      @default(false)
 
   cars                 Car[]
   expenses             Expense[]
@@ -119,7 +119,7 @@ enum TransactionType {
   EXPENSE
 }
 
-// --- TÖRZADATOK ---
+// --- TÖRZADATOK (Lookup Tables) ---
 
 model CarType {
   id    Int    @id @default(autoincrement())
