@@ -74,19 +74,34 @@ export async function deleteCar(carId: number) {
   redirect('/dashboard')
 }
 
+// src/app/actions.ts
+
 export async function updateCar(formData: FormData) {
   const session = await auth();
-  if (!session?.user?.email) return { error: "Nincs bejelentkezve" };
+  if (!session?.user?.email) return; // Ha nincs belépve, ne csináljon semmit, NextAuth kezeli
 
   const carId = Number(formData.get("carId"));
 
+  // Ezt a rész lehet, hogy egyszerűbb lenne elhagyni a Vercel-hez.
+  // Mivel a prisma.car.update a user.id alapján nem tud szűrni, 
+  // így az ownerId checket kell futtatnunk itt, különben bárki frissíthetne.
   const user = await prisma.user.findUnique({
       where: { email: session.user.email },
-      include: { cars: true }
+      select: { id: true }
   });
-  const isMyCar = user?.cars.some(c => c.id === carId);
-  if (!isMyCar) return { error: "Nincs jogosultságod szerkeszteni ezt az autót." };
 
+  const car = await prisma.car.findUnique({
+      where: { id: carId },
+      select: { ownerId: true }
+  })
+
+  if (!car || !user || car.ownerId !== user.id) {
+      // Hiba esetén NE adjunk vissza semmit, csak console log és visszairányítás a dashboardra
+      console.error("JOGOSULTSÁGI HIBA: Valaki más autóját akarták szerkeszteni.");
+      redirect('/dashboard'); 
+  }
+
+  // Típuskényszerítés nélkül
   const brand = formData.get("brand") as string;
   const type = formData.get("type") as string;
   const license = formData.get("license") as string;
@@ -107,14 +122,13 @@ export async function updateCar(formData: FormData) {
       }
     });
   } catch (error) {
-    console.error("Hiba:", error);
-    return { error: "Sikertelen frissítés" };
+    console.error("Adatbázis frissítési hiba:", error);
+    // Ezt a hibát nem tudjuk elegánsan kijelezni a felhasználónak Server Actionben, csak logoljuk.
   }
 
   revalidatePath(`/dashboard/car/${carId}`);
   redirect(`/dashboard/car/${carId}`);
 }
-
 // --- SZERVIZ MŰVELETEK ---
 
 export async function addService(formData: FormData) {
