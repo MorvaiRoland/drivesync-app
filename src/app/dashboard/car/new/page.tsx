@@ -1,7 +1,30 @@
+'use client'
+
 import { addCar } from "@/app/actions";
 import Link from "next/link";
+import { useState } from "react";
 
+// Egy Kliens Komponens wrapper a hibakezeléshez
 export default function NewCarPage() {
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // A Server Action async-et vár, de mi wrappereljük
+  const handleSubmit = async (formData: FormData) => {
+    setLoading(true);
+    setError(null);
+    
+    // Itt hívjuk meg a Server Actiont, de nem a form action-ben.
+    // Ez lehetővé teszi, hogy megkapjuk a visszatérő objektumot: { error: string }
+    const result = await addCar(formData); 
+    
+    if (result?.error) {
+        setError(result.error);
+        setLoading(false);
+    }
+    // Ha nincs error, az addCar action belsejében lévő redirect('/dashboard') fog futni.
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white max-w-2xl w-full rounded-2xl shadow-xl border border-gray-100 p-8">
@@ -13,66 +36,44 @@ export default function NewCarPage() {
           </Link>
         </div>
 
-        <form action={addCar} className="space-y-6">
+        {error && (
+            <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-100 text-red-600 text-sm text-center font-medium">
+                Hiba: {error}
+            </div>
+        )}
+
+        {/* Action helyett onSubmit-et használunk, ami meghívja a handleSubmit-et */}
+        <form action={handleSubmit} className="space-y-6"> 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* Márka */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Márka</label>
-              <input 
-                name="brand" 
-                type="text" 
-                placeholder="Pl. BMW" 
-                required 
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-              />
+              <input name="brand" type="text" placeholder="Pl. BMW" required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition" />
             </div>
 
             {/* Típus */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Típus</label>
-              <input 
-                name="type" 
-                type="text" 
-                placeholder="Pl. 320d" 
-                required 
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-              />
+              <input name="type" type="text" placeholder="Pl. 320d" required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition" />
             </div>
 
             {/* Rendszám */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Rendszám</label>
-              <input 
-                name="license" 
-                type="text" 
-                placeholder="ABC-123" 
-                required 
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition uppercase"
-              />
+              <input name="license" type="text" placeholder="ABC-123" required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition uppercase" />
             </div>
 
             {/* Évjárat */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Évjárat</label>
-              <input 
-                name="vintage" 
-                type="number" 
-                placeholder="2018" 
-                min="1900" 
-                max="2026"
-                required 
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-              />
+              <input name="vintage" type="number" placeholder="2018" min="1900" max="2026" required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition" />
             </div>
 
             {/* Üzemanyag */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Üzemanyag</label>
-              <select 
-                name="fuelType" 
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white"
-              >
+              <select name="fuelType" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition bg-white">
                 <option value="Benzin">Benzin</option>
                 <option value="Dízel">Dízel</option>
                 <option value="Elektromos">Elektromos</option>
@@ -83,25 +84,14 @@ export default function NewCarPage() {
             {/* Kilométeróra */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Jelenlegi Km állás</label>
-              <input 
-                name="km" 
-                type="number" 
-                placeholder="150000" 
-                required 
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
-              />
+              <input name="km" type="number" placeholder="150000" required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition" />
             </div>
             
              {/* Színválasztó */}
              <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-1">Autó színe (megjelenéshez)</label>
               <div className="flex items-center gap-4">
-                  <input 
-                    name="color" 
-                    type="color" 
-                    defaultValue="#3b82f6"
-                    className="h-10 w-20 p-1 border border-gray-300 rounded cursor-pointer"
-                  />
+                  <input name="color" type="color" defaultValue="#3b82f6" className="h-10 w-20 p-1 border border-gray-300 rounded cursor-pointer" />
                   <span className="text-xs text-gray-500">Válassz színt, ami megjelenik majd a kártyán</span>
               </div>
             </div>
@@ -111,9 +101,10 @@ export default function NewCarPage() {
           <div className="pt-4 flex gap-4">
              <button 
                 type="submit" 
-                className="flex-1 bg-blue-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-blue-700 transition shadow-lg"
+                disabled={loading}
+                className="flex-1 bg-blue-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-blue-700 transition shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
              >
-               Mentés
+               {loading ? 'Mentés...' : 'Mentés'}
              </button>
              <Link 
                 href="/dashboard"

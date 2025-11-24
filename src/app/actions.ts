@@ -7,10 +7,14 @@ import { redirect } from "next/navigation"
 
 // --- AUTÓ MŰVELETEK ---
 
+// src/app/actions.ts
+
+// src/app/actions.ts (addCar függvény)
+
 export async function addCar(formData: FormData) {
   const session = await auth()
-  if (!session?.user?.email) return { error: "Nincs bejelentkezve!" }
-
+  if (!session?.user?.email) return { error: "Nincs bejelentkezve!" } // Maradhat az error visszatérés
+  
   const user = await prisma.user.findUnique({
     where: { email: session.user.email }
   })
@@ -18,35 +22,29 @@ export async function addCar(formData: FormData) {
   if (!user) return { error: "Felhasználó nem található" }
 
   const brand = formData.get("brand") as string
-  const type = formData.get("type") as string
+  // ... (a többi adat kinyerése) ...
   const license = formData.get("license") as string
-  const vintage = Number(formData.get("vintage"))
-  const km = Number(formData.get("km"))
-  const fuelType = formData.get("fuelType") as string
-  const color = formData.get("color") as string
 
+  // A jogosultság és a sikeres mentés után történik a redirect
   try {
     await prisma.car.create({
       data: {
         ownerId: user.id,
         brand,
-        type,
-        license,
-        vintage,
-        km,
-        fuelType,
-        color,
-        archived: false
+        // ... (a többi adat) ...
       }
     })
   } catch (error) {
-    console.error("Adatbázis hiba:", error)
-    return { error: "Hiba történt a mentés során." }
+    console.error("Adatbázis hiba az autó mentésekor:", error)
+    return { error: "Hiba történt a mentés során." } // Itt adjuk vissza a hibát
   }
 
+  // Siker esetén Navigálás
   revalidatePath('/dashboard')
-  redirect('/dashboard')
+  redirect('/dashboard') // A redirect megszakítja a futást, és nincs visszatérési típusa
 }
+
+// ... a többi action változatlan ...
 
 export async function deleteCar(carId: number) {
   const session = await auth()
