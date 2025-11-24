@@ -203,11 +203,26 @@ export async function deleteServiceRecord(serviceId: number) {
 
 // --- EMLÉKEZTETŐ MŰVELETEK ---
 
+// src/app/actions.ts
+
 export async function addUpcomingService(formData: FormData) {
   const session = await auth();
-  if (!session?.user?.email) return { error: "Nincs bejelentkezve" };
+  if (!session?.user?.email) return; // Nincs bejelentkezve
 
   const carId = Number(formData.get("carId"));
+
+  // Jogosultság ellenőrzés
+  const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: { cars: true }
+  });
+
+  const isMyCar = user?.cars.some(c => c.id === carId);
+  if (!isMyCar) {
+    console.error("JOGOSULTSÁGI HIBA: Valaki más autójához akart emlékeztetőt hozzáadni.");
+    redirect('/dashboard'); // Visszairányítjuk a dashboardra
+  }
+
   const dateStr = formData.get("serviceDate") as string;
   const location = formData.get("location") as string;
   const notes = formData.get("notes") as string;
@@ -224,14 +239,14 @@ export async function addUpcomingService(formData: FormData) {
       }
     });
   } catch (error) {
-    console.error("Hiba:", error);
-    return { error: "Sikertelen mentés" };
+    console.error("Emlékeztető mentési hiba:", error);
+    // Hiba esetén itt is csak a console log és a navigáció fut le
   }
 
+  // Siker esetén navigálás
   revalidatePath(`/dashboard/car/${carId}`);
   redirect(`/dashboard/car/${carId}`);
 }
-
 export async function deleteUpcomingService(id: number) {
   await prisma.upcomingService.delete({ where: { id } });
   revalidatePath('/dashboard/car/[id]', 'page'); 
